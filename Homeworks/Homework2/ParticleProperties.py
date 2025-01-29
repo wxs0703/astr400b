@@ -11,6 +11,11 @@ def particle_info(filename, ptype, pid):
     filename: str, data file directory
     ptype: int, index representing the type of particle
     pid: int, index of particle within a type
+    
+    Returns:
+    dist: float, 3D distance to particle in kpc
+    v: float, 3D velocity of particle in km/s
+    m: float, mass of particle in M_sun
     '''
     time, N, data = read(filename)                               #read out simulation data
     data_typed = data[np.where(data['type']==ptype)]             #filter only data of given type
