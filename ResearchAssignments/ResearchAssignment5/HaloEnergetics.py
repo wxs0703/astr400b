@@ -11,6 +11,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
+from ReadFile import Read
+from CenterOfMass import CenterOfMass
 from MassProfile import MassProfile
 
 m_halo = {'MW': 1.975, 'M31': 1.921, 'M33': 0.187}
@@ -29,11 +31,37 @@ class HaloEnergetics:
         gal: str, string that represents the halo, e.g. "MW", "M31", or "M33"
         snap: int, snapshot number
         '''
+        # Determine Filename
+        # add a string of the filenumber to the value "000"
+        ilbl = '000' + str(snap)
+        # remove all but the last 3 digits
+        ilbl = ilbl[-3:]
+        # create filenames
+        self.filename = f'/home/astr400b/HighRes/{galaxy}/{galaxy}_{ilbl}.txt'
+        
+        # Define some basic galaxy properties
         self.galaxy = galaxy
         self.snap = snap
         self.MP = MassProfile(galaxy, snap)
         self.M = m_halo[galaxy]*1e12
-        self.G = self.MP.G.value
+        
+        self.G = self.MP.G.value # big G constant
+        
+        # Store mass, position, velocity data for later kinetic energy calculation
+        isHalo = np.where(self.MP.data['type'] == 1)
+        data = self.MP.data[isHalo]
+        self.m = data['m']
+        self.x = data['x']
+        self.y = data['y']
+        self.z = data['z']
+        self.vx = data['vx']
+        self.vy = data['vy']
+        self.vz = data['vz']
+        del data
+        
+        # Calculate center of mass
+        com = CenterOfMass(self.filename,2)
+        self.com_p = com.COM_P(0.1).value
         
         if r_enc is not None:
             self.full_compute(r_enc)
@@ -48,8 +76,9 @@ class HaloEnergetics:
         '''
         self.density_profile(r_enc)
         self.fit_hernquist()
-        self.hernquist_pot_energy(self.r)
         self.virial_radius()
+        self.hernquist_pot_energy()
+        self.kinetic_energy()
     
     def save_density_profile(self):
         '''
@@ -93,27 +122,45 @@ class HaloEnergetics:
                                method='trf', p0=[self.M, 50], max_nfev=1000)
         self.a = popt[1]
     
-    def hernquist_pot_energy(self, r):
-        '''
-        Calculates the gravitational potential energy of the halo based on a hernquist density profile.
-        
-        Arguments
-        ---------
-        r: np.array, array of radii to calculate the potential.
-        '''
-        self.Phi = -self.G*self.M/(r+self.a)
-        Phi_0 = -self.G*self.M/(self.a)
-        self.U = self.Phi-Phi_0
-    
     def virial_radius(self):
         '''
-        Calculates the virial radius of the halo, defined as 360 times the dark matter density
+        Calculates the virial radius of the halo, defined as 200 times the critical density
         of the universe.
         '''
-        rho_dm = cosmo.rho_c(0)*(cosmo.Om(0)-cosmo.Ob(0))
-        hern = lambda r: np.abs(self.hernquist(r, self.M, self.a)-rho_dm)
-        res = so.minimize(hern, 1000)
+        rho_vir = cosmo.rho_c(0)*200 # reference density based on vir radius definition
+        # functions to be minimized
+        rho_enc = lambda r: self.MP.hernquistMass(r, self.a, self.M).value/((4/3)*np.pi*r**3)
+        overdensity = lambda r: np.abs(rho_enc(r)-rho_vir)
+        # minimize and extract result
+        res = so.minimize(overdensity, 100, bounds=[(10, 1000)])
         self.r_vir = res.x[0]
+        
+    def hernquist_pot_energy(self):
+        '''
+        Calculates the gravitational potential energy of the halo based on a hernquist density profile.
+        '''
+        self.Phi = -self.G*self.M/(self.r+self.a)
+        Phi_0 = -self.G*self.M/(self.a)
+        self.U = self.Phi-Phi_0
+        self.U_tot = -self.G*self.M/(self.r_vir+self.a)-Phi_0
+    
+    def kinetic_energy(self):
+        '''
+        Calculates the kinetic energy of the halo with respect to r as well as total kinetic energy.
+        '''
+        xdist = self.x - self.com_p[0]
+        ydist = self.y - self.com_p[1]
+        zdist = self.z - self.com_p[2]
+        rdist = np.sqrt(xdist**2 + ydist**2 + zdist**2)
+        v2 = self.vx**2 + self.vy**2 + self.vz**2
+        m = self.m
+        K = []
+        for R in self.r:
+            mask = rdist < R
+            K.append(np.sum(0.5*m[mask]*v2[mask]))
+        self.K = np.array(K)
+        mask = rdist < self.r_vir
+        self.K_tot = np.sum(0.5*m[mask]*v2[mask])
     
     @staticmethod
     def hernquist(r, M, a):
