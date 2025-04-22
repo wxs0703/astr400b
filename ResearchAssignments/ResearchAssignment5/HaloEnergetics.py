@@ -128,9 +128,11 @@ class HaloEnergetics:
         of the universe.
         '''
         rho_vir = cosmo.rho_c(0)*200 # reference density based on vir radius definition
+        
         # functions to be minimized
         rho_enc = lambda r: self.MP.hernquistMass(r, self.a, self.M).value/((4/3)*np.pi*r**3)
         overdensity = lambda r: np.abs(rho_enc(r)-rho_vir)
+        
         # minimize and extract result
         res = so.minimize(overdensity, 100, bounds=[(10, 1000)])
         self.r_vir = res.x[0]
@@ -138,27 +140,38 @@ class HaloEnergetics:
     def hernquist_pot_energy(self):
         '''
         Calculates the gravitational potential energy of the halo based on a hernquist density profile.
+        Units: Msun km^2 s^-2
         '''
-        self.Phi = -self.G*self.M/(self.r+self.a)
-        Phi_0 = -self.G*self.M/(self.a)
-        self.U = self.Phi-Phi_0
-        self.U_tot = -self.G*self.M/(self.r_vir+self.a)-Phi_0
+        # Calculate components of potential energy
+        Uinf = -self.G*self.M**2/(6*self.a)
+        U1 = lambda r: self.G*self.M**2*self.a/(2*(r+self.a)**2)
+        U2 = lambda r: -self.G*self.M**2*self.a**2/(3*(r+self.a)**3)
+        
+        # Calculate potential energy profile an total potential energy
+        self.U = -(Uinf+U1(self.r)+U2(self.r))
+        self.U_tot = -(Uinf+U1(self.r_vir)+U2(self.r_vir))
     
     def kinetic_energy(self):
         '''
         Calculates the kinetic energy of the halo with respect to r as well as total kinetic energy.
+        Units: Msun km^2 s^-2
         '''
+        # shift particle coordinates relative to center of mass
         xdist = self.x - self.com_p[0]
         ydist = self.y - self.com_p[1]
         zdist = self.z - self.com_p[2]
         rdist = np.sqrt(xdist**2 + ydist**2 + zdist**2)
         v2 = self.vx**2 + self.vy**2 + self.vz**2
-        m = self.m
+        m = self.m*1e10
+        
+        # calculate kinetic energy enclosed within each radii
         K = []
         for R in self.r:
             mask = rdist < R
             K.append(np.sum(0.5*m[mask]*v2[mask]))
         self.K = np.array(K)
+        
+        # calculate total kinetic energy
         mask = rdist < self.r_vir
         self.K_tot = np.sum(0.5*m[mask]*v2[mask])
     
