@@ -148,8 +148,8 @@ class HaloEnergetics:
         U2 = lambda r: -self.G*self.M**2*self.a**2/(3*(r+self.a)**3)
         
         # Calculate potential energy profile an total potential energy
-        self.U = -(Uinf+U1(self.r)+U2(self.r))
-        self.U_tot = -(Uinf+U1(self.r_vir)+U2(self.r_vir))
+        self.U = Uinf+U1(self.r)+U2(self.r)
+        self.U_tot = Uinf+U1(self.r_vir)+U2(self.r_vir)
     
     def kinetic_energy(self):
         '''
@@ -185,3 +185,12 @@ class HaloEnergetics:
         rho_0: float, central density
         '''
         return (M/(2*np.pi)) * a/(r*(r+a)**3)
+
+    
+class MergedHaloEnergetics(HaloEnergetics):
+    '''
+    A child class to HaloEnergetics specifically for analyzing the MW-M31 merged remnant as a whole.
+    '''
+    
+    def __init__(snap, r_enc=None):
+        pass
