@@ -387,6 +387,43 @@ def vCircPlot(galaxy, snap, plot_name, a):
     ax.legend(loc="lower right")
     # save as image
     plt.savefig(plot_name)
+
+class MergedMassProfile(MassProfile):
+    '''
+    Child class of MassProfile specifically to handle M31 and MW particles together after merger.
+    '''
+    
+    def __init__(self, snap):
+        
+        # Determine Filename
+        # add a string of the filenumber to the value "000"
+        ilbl = '000' + str(snap)
+        # remove all but the last 3 digits
+        ilbl = ilbl[-3:]
+        # create filenames
+        file_M31 = f'/home/astr400b/HighRes/M31/M31_{ilbl}.txt'
+        file_MW = f'/home/astr400b/HighRes/MW/MW_{ilbl}.txt'
+        self.filename = file_MW
+        
+        # read the particle data
+        time_M31, total_M31, data_M31 = Read(file_M31)
+        time_MW, total_MW, data_MW = Read(file_MW)
+        self.time = time_MW
+        self.total = total_M31 + total_MW
+        self.data = np.concatenate((data_M31, data_MW), axis=0)
+
+        # store the mass, positions, velocities of all particles                                
+        self.m = self.data['m']#*u.Msun
+        self.x = self.data['x']*u.kpc
+        self.y = self.data['y']*u.kpc
+        self.z = self.data['z']*u.kpc
+    
+        # store galaxy name
+        self.gname = 'merged'
+    
+        # converting G to units of kpc*km^2/s^2/Msun
+        self.G = const.G.to(u.kpc*u.km**2/u.s**2/u.Msun) 
+
     
 # ---------------------- MAIN ---------------------- #
 if __name__ == '__main__':
@@ -521,5 +558,4 @@ if __name__ == '__main__':
     print(" ")
     print(VtestM33[RR])
     print("Hernquist Vc",HVtestM33)
-
 
